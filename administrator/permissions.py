@@ -53,3 +53,10 @@ class PharmacistWriteStaffRead(ReadByStaffWriteByRole):
 
 class LabTechWriteStaffRead(ReadByStaffWriteByRole):
     allowed_roles = (Role.LAB_TECHNICIAN,)
+
+
+class IsAdministrator(HasRole):
+    """Only users whose role is ADMINISTRATOR."""
+
+    allowed_roles = (Role.ADMINISTRATOR,)
+    message = "Only administrators can use this endpoint."
