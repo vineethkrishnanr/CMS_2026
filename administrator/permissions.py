@@ -29,6 +29,11 @@ class IsPharmacist(HasRole):
     allowed_roles = (Role.PHARMACIST,)
 
 
+class IsReceptionist(HasRole):
+    allowed_roles = (Role.RECEPTIONIST,)
+    message = "Only receptionists can use this endpoint."
+
+
 class IsLabTechnician(HasRole):
     allowed_roles = (Role.LAB_TECHNICIAN,)
 

@@ -86,6 +86,7 @@ class LabOrderViewSet(viewsets.ReadOnlyModelViewSet):
             )
             .order_by("priority_rank", "ordered_at")
         )
+        qs = qs.filter(bill_items__bill__status="PAID")
         params = self.request.query_params
         if params.get("status"):
             qs = qs.filter(status=params["status"].upper())
@@ -107,6 +108,9 @@ class LabOrderViewSet(viewsets.ReadOnlyModelViewSet):
                 raise ValidationError(
                     {"detail": f"A sample can only be collected for an ORDERED lab order (now: {order.status})."}
                 )
+            from receptionist.models import Bill, BillItem
+            if not BillItem.objects.filter(lab_order=order, bill__status=Bill.Status.PAID).exists():
+                raise ValidationError({"detail": "This test is not paid yet. Send the patient to the receptionist."})
             sample = LabSample.objects.create(
                 lab_order=order,
                 collected_by=request.user,
@@ -136,7 +140,10 @@ class LabOrderViewSet(viewsets.ReadOnlyModelViewSet):
 
             data = dict(serializer.validated_data)
             if "flag" not in data:
-                data["flag"] = suggest_flag(order.test, data["result_value"]) or LabResult.Flag.NORMAL
+                suggested = suggest_flag(order.test, data["result_value"])
+                if suggested is None:
+                    raise ValidationError({"flag": "Cannot work out the flag automatically. Please choose one."})
+                data["flag"] = suggested
 
             result = LabResult.objects.create(lab_order=order, entered_by=request.user, **data)
             log_action(request.user, f"Entered result for lab order {order.pk} (flag {result.flag})")

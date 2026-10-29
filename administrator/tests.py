@@ -35,8 +35,10 @@ class AdminModuleTests(APITestCase):
         r = self.client.post("/api/admin/users/", {
             "username": "dr_ravi", "password": "Ravi@12345", "first_name": "Ravi",
             "email": "ravi@clinic.com", "role": "DOCTOR", "phone": "9876543210",
+            "consultation_fee": "300.00",
         })
         self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(DoctorProfile.objects.get(user__username="dr_ravi").consultation_fee, 300)
         self.assertNotIn("password", r.data)
         self.assertTrue(DoctorProfile.objects.filter(user__username="dr_ravi").exists())
         self.assertTrue(AuditLog.objects.filter(user=self.admin, action__icontains="dr_ravi").exists())

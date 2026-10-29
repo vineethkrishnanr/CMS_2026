@@ -6,6 +6,7 @@ from rest_framework import serializers
 from administrator.audit import log_action
 from doctor.models import PrescriptionItem
 from .models import Dispensation, Medicine, MedicineBatch
+from receptionist.models import Bill, BillItem
 
 
 # ----------------------------------------------------------------------------
@@ -95,6 +96,10 @@ class MedicineBatchSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if self.instance is None:
             attrs.setdefault("quantity_remaining", attrs["quantity_received"])
+        elif {"quantity_received", "quantity_remaining"} & attrs.keys():      # <-- new
+            raise serializers.ValidationError(                                # <-- new
+                "Stock quantities cannot be edited on an existing batch. Add a new batch instead."  # <-- new
+            )                                                                 # <-- new
         elif "medicine" in attrs and attrs["medicine"] != self.instance.medicine:
             raise serializers.ValidationError(
                 {"medicine": "A batch cannot be moved to another medicine."}
@@ -158,6 +163,10 @@ def _check_dispensable(item, batch, qty):
     if not item.consultation.finalized:
         raise serializers.ValidationError(
             {"prescription_item": "The doctor has not finalized this consultation."}
+        )
+    if not BillItem.objects.filter(prescription_item=item, bill__status=Bill.Status.PAID).exists():
+        raise serializers.ValidationError(
+            {"prescription_item": "This medicine is not paid yet. Send the patient to the receptionist."}
         )
     if item.status not in (
         PrescriptionItem.Status.PRESCRIBED,
@@ -237,7 +246,7 @@ class DispensationSerializer(serializers.ModelSerializer):
             batch=batch,
             quantity_dispensed=qty,
             pharmacist=user,
-            unit_price=batch.selling_price,  # price always comes from the server
+            unit_price=item.bill_items.filter(bill__status="PAID").first().unit_price,
         )
 
         total = _already_dispensed(item)

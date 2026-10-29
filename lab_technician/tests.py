@@ -5,9 +5,17 @@ from rest_framework.test import APITestCase
 
 from administrator.models import AuditLog, DoctorProfile, User
 from doctor.models import Consultation
-from receptionist.models import Appointment, Patient
+from receptionist.models import Appointment, BillItem, Patient
 from .models import LabOrder, LabResult, LabResultAmendment, LabSample, LabTest
 from .utils import suggest_flag
+from receptionist.billing import create_services_bill, record_payment
+
+
+def pay_services_bill(appointment, user):
+    """Generate the lab+medicine bill of the appointment and pay it in full (cash)."""
+    bill = create_services_bill(appointment, user)
+    record_payment(bill.pk, bill.total_amount, "CASH", "", user)
+    return bill
 
 
 class LabAPITests(APITestCase):
@@ -34,6 +42,7 @@ class LabAPITests(APITestCase):
         self.order = LabOrder.objects.create(
             consultation=consultation, test=self.test, patient=self.patient, ordered_by=self.doctor,
         )
+        self.bill = pay_services_bill(appointment, self.receptionist)   # lab only works after payment
         self.client.force_authenticate(self.tech)
 
     # helpers
@@ -77,6 +86,8 @@ class LabAPITests(APITestCase):
             consultation=self.order.consultation, test=self.test, patient=self.patient,
             ordered_by=self.doctor, priority=LabOrder.Priority.STAT,
         )
+        BillItem.objects.create(bill=self.bill, item_type="LAB", lab_order=stat, description="x",
+                                quantity=1, unit_price=150, line_total=150)   # paid as well
         data = self.client.get(reverse("lab-order-list")).data
         self.assertEqual(data[0]["lab_order_id"], stat.pk)
 

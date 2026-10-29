@@ -15,6 +15,7 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=Role.choices)
     phone = models.CharField(max_length=15, blank=True)
     address = models.TextField(blank=True)
+    REQUIRED_FIELDS = ["email", "role"]
 
     def __str__(self):
         return f"{self.username} - {self.role}"
@@ -37,6 +38,7 @@ class DoctorProfile(models.Model):
         on_delete=models.CASCADE,
         related_name="doctor_profile",
     )
+    consultation_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)
 
     def __str__(self):
         return f"Doctor: {self.user.username}"

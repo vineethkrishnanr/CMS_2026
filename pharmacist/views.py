@@ -127,6 +127,7 @@ class PendingPrescriptionListView(generics.ListAPIView):
         qs = (
             PrescriptionItem.objects.filter(
                 consultation__finalized=True,
+                bill_items__bill__status="PAID",
                 status__in=[
                     PrescriptionItem.Status.PRESCRIBED,
                     PrescriptionItem.Status.PARTIALLY_DISPENSED,

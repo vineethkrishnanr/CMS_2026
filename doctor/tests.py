@@ -8,6 +8,8 @@ from lab_technician.models import LabOrder, LabResult, LabTest
 from pharmacist.models import Medicine
 from receptionist.models import Appointment, Patient, VisitToken
 
+from receptionist.billing import create_services_bill, record_payment
+
 from .models import Consultation, PrescriptionItem
 
 
@@ -166,8 +168,13 @@ class DoctorAPITests(APITestCase):
         self.assertEqual(self.appt.status, Appointment.Status.COMPLETED)
         self.assertEqual(self.token.status, VisitToken.Status.COMPLETED)
 
-        # pharmacist now sees the prescription
+        # finalized but not paid yet -> pharmacist still sees nothing
         self.client.force_authenticate(self.pharma)
+        self.assertEqual(len(self.client.get(reverse("pending-prescriptions")).data), 0)
+
+        # receptionist bills + collects payment -> pharmacist now sees the prescription
+        bill = create_services_bill(self.appt, self.recep)
+        record_payment(bill.pk, bill.total_amount, "CASH", "", self.recep)
         self.assertEqual(len(self.client.get(reverse("pending-prescriptions")).data), 1)
 
         # everything is locked for the doctor
@@ -177,9 +184,9 @@ class DoctorAPITests(APITestCase):
             self.client.patch(reverse("doctor-consultation-detail", args=[cid]), {"diagnosis": "x"}, format="json").status_code, 400)
         self.assertEqual(self.add_med(cid, medicine=self.para.pk).status_code, 400)
         self.assertEqual(self.client.delete(reverse("doctor-prescription-detail", args=[item_id])).status_code, 400)
-        # ...but a not-yet-dispensed item can be cancelled
+        # ...and an item that is already billed can no longer be cancelled by the doctor
         res = self.client.post(reverse("doctor-prescription-cancel", args=[item_id]))
-        self.assertEqual(res.data["status"], "CANCELLED")
+        self.assertEqual(res.status_code, 400)
 
     def test_cannot_cancel_dispensed_item(self):
         cid = self.started()

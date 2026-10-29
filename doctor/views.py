@@ -266,8 +266,10 @@ class PrescriptionItemViewSet(
             item = self._locked(pk)
             if item.status != PrescriptionItem.Status.PRESCRIBED:
                 raise ValidationError(
-                    {"detail": f"Only items that are not dispensed yet can be cancelled (now: {item.status})."}
+                    {"detail": f"Only PRESCRIBED items can be cancelled (now: {item.status})."}
                 )
+            if item.bill_items.exists():
+                raise ValidationError({"detail": "This is already billed. Ask the receptionist to handle a refund."})
             item.status = PrescriptionItem.Status.CANCELLED
             item.save(update_fields=["status"])
             log_action(request.user, f"Cancelled prescription item {item.pk}")
@@ -327,6 +329,8 @@ class DoctorLabOrderViewSet(
                 raise ValidationError(
                     {"detail": f"Only ORDERED lab orders can be cancelled (now: {order.status})."}
                 )
+            if order.bill_items.exists():
+                raise ValidationError({"detail": "This is already billed. Ask the receptionist to handle a refund."})
             order.status = LabOrder.Status.CANCELLED
             order.save(update_fields=["status"])
             log_action(request.user, f"Cancelled lab order {order.pk}")

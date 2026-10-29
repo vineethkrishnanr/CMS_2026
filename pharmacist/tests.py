@@ -10,6 +10,14 @@ from administrator.models import AuditLog, DoctorProfile, User
 from doctor.models import Consultation, PrescriptionItem
 from receptionist.models import Appointment, Patient
 from .models import Dispensation, Medicine, MedicineBatch
+from receptionist.billing import create_services_bill, record_payment
+
+
+def pay_services_bill(appointment, user):
+    """Generate the lab+medicine bill of the appointment and pay it in full (cash)."""
+    bill = create_services_bill(appointment, user)
+    record_payment(bill.pk, bill.total_amount, "CASH", "", user)
+    return bill
 
 
 class PharmacistAPITests(APITestCase):
@@ -46,6 +54,7 @@ class PharmacistAPITests(APITestCase):
             consultation=self.consultation, medicine=self.medicine,
             dosage="1 tab", frequency="TID", duration="5 days", quantity=15,
         )
+        pay_services_bill(appointment, self.receptionist)   # pharmacy only works after payment
         self.client.force_authenticate(self.pharmacist)
 
     def dispense(self, qty, batch=None, item=None):
@@ -125,7 +134,7 @@ class PharmacistAPITests(APITestCase):
     def test_partial_then_full_dispense(self):
         r = self.dispense(10)
         self.assertEqual(r.status_code, 201, r.data)
-        self.assertEqual(str(r.data["unit_price"]), "2.50")  # from batch, not client
+        self.assertEqual(str(r.data["unit_price"]), "2.00")  # price the patient PAID (from the bill), not from the client
         self.batch.refresh_from_db()
         self.item.refresh_from_db()
         self.assertEqual(self.batch.quantity_remaining, 90)

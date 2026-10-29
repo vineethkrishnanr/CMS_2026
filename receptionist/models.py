@@ -129,6 +129,10 @@ class VisitToken(models.Model):
 
 
 class Bill(models.Model):
+    class Type(models.TextChoices):
+        CONSULTATION = "CONSULTATION", "Consultation"
+        SERVICES = "SERVICES", "Lab and Medicine"
+
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
         PARTIALLY_PAID = "PARTIALLY_PAID", "Partially Paid"
@@ -137,11 +141,12 @@ class Bill(models.Model):
 
     bill_id = models.AutoField(primary_key=True)
 
-    appointment = models.OneToOneField(
+    appointment = models.ForeignKey(            # was OneToOneField
         Appointment,
         on_delete=models.PROTECT,
-        related_name="bill",
+        related_name="bills",                   # was "bill"
     )
+    bill_type = models.CharField(max_length=15, choices=Type.choices)
     patient = models.ForeignKey(
         Patient,
         on_delete=models.PROTECT,
@@ -160,6 +165,14 @@ class Bill(models.Model):
         choices=Status.choices,
         default=Status.PENDING,
     )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["appointment", "bill_type"],
+                name="one_bill_per_type",
+            )
+        ]
 
     def __str__(self):
         return f"Bill {self.bill_id}"
@@ -197,6 +210,13 @@ class BillItem(models.Model):
         null=True,
         blank=True,
         related_name="bill_items",
+    )
+    prescription_item = models.ForeignKey(
+    "doctor.PrescriptionItem",
+    on_delete=models.PROTECT,
+    null=True,
+    blank=True,
+    related_name="bill_items",
     )
 
     description = models.CharField(max_length=255)

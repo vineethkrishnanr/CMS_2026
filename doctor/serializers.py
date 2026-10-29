@@ -229,6 +229,8 @@ class ConsultationCreateSerializer(_FollowUpMixin, serializers.ModelSerializer):
     def validate_appointment(self, appointment):
         if appointment.doctor_id != _doctor(self).pk:
             raise serializers.ValidationError("This appointment does not belong to you.")
+        if appointment.date != timezone.localdate():                                     # <-- new
+            raise serializers.ValidationError("This appointment is not scheduled for today.")  # <-- new
         if appointment.status != Appointment.Status.CONFIRMED:
             raise serializers.ValidationError(
                 f"Appointment must be CONFIRMED to start a consultation (now: {appointment.status})."
