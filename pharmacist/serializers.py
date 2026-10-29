@@ -39,7 +39,7 @@ class MedicineSerializer(serializers.ModelSerializer):
         return total or 0
 
     def validate_unit_price(self, value):
-        if value < 0:
+        if value <= 0:
             raise serializers.ValidationError("Unit price cannot be negative.")
         return value
 
@@ -83,12 +83,12 @@ class MedicineBatchSerializer(serializers.ModelSerializer):
         return value
 
     def validate_purchase_price(self, value):
-        if value < 0:
+        if value <= 0:
             raise serializers.ValidationError("Price cannot be negative.")
         return value
 
     def validate_selling_price(self, value):
-        if value < 0:
+        if value <=  0:
             raise serializers.ValidationError("Price cannot be negative.")
         return value
 
