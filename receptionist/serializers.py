@@ -4,6 +4,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from administrator.models import DoctorProfile
+from .availability import build_slots, has_schedule
 from .models import Appointment, Bill, BillItem, Patient, Payment
 
 
@@ -76,6 +77,23 @@ class AppointmentSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        if self.instance is None and has_schedule(attrs["doctor"]):
+            slots = build_slots(attrs["doctor"], attrs["date"])
+            if not slots:
+                raise serializers.ValidationError(
+                    {"date": "This doctor does not work on " + attrs["date"].strftime("%A") + "s."}
+                )
+            wanted = attrs["start_time"].strftime("%H:%M:%S")
+            match = next((x for x in slots if x["start_time"] == wanted), None)
+            if match is None:
+                raise serializers.ValidationError(
+                    {"start_time": "Not a valid slot for this doctor. Check "
+                                   "/doctors/<id>/availability/?date=" + str(attrs["date"])}
+                )
+            if not match["available"]:
+                raise serializers.ValidationError(
+                    {"start_time": "That slot is already booked or the doctor's daily limit is reached."}
+                )
         if self.instance is None:
             clash = Appointment.objects.filter(
                 doctor=attrs["doctor"], date=attrs["date"], start_time=attrs["start_time"]

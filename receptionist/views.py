@@ -1,12 +1,15 @@
 from django.db import transaction
 from django.db.models import Q
+from django.utils.dateparse import parse_date
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from administrator.audit import log_action
 from administrator.models import DoctorProfile
 from administrator.permissions import IsReceptionist
+from .availability import build_slots, day_windows
 from .billing import cancel_appointment, create_consultation_bill, create_services_bill, record_payment
 from .models import Appointment, Bill, Patient
 from .serializers import (
@@ -49,6 +52,34 @@ class DoctorListViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
 
     def get_queryset(self):
         return DoctorProfile.objects.filter(user__is_active=True).select_related("user").order_by("user__username")
+
+    @action(detail=True, methods=["get"])
+    def availability(self, request, pk=None):
+        """
+        GET /doctors/<id>/availability/?date=YYYY-MM-DD
+        Working hours of that day plus every slot, marked available / booked.
+        """
+        doctor = self.get_object()
+        day = parse_date(request.query_params.get("date", "") or "")
+        if day is None:
+            raise ValidationError({"date": "Required. Use the format YYYY-MM-DD."})
+        windows = day_windows(doctor, day)
+        slots = build_slots(doctor, day)
+        return Response({
+            "doctor": doctor.pk,
+            "doctor_name": doctor.user.get_full_name() or doctor.user.username,
+            "consultation_fee": doctor.consultation_fee,
+            "date": day,
+            "weekday": day.strftime("%A"),
+            "working": bool(windows),
+            "working_hours": [
+                {"start_time": w.start_time, "end_time": w.end_time,
+                 "slot_minutes": w.slot_minutes, "max_tokens": w.max_tokens}
+                for w in windows
+            ],
+            "slots": slots,
+            "available_count": sum(1 for x in slots if x["available"]),
+        })
 
 
 class AppointmentViewSet(
@@ -127,4 +158,3 @@ class BillViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gen
         d = serializer.validated_data
         record_payment(pk, d["amount"], d["payment_method"], d["transaction_reference"], request.user)
         return Response(self.get_serializer(self.get_queryset().get(pk=pk)).data)
-    
